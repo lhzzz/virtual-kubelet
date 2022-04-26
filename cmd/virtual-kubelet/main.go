@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -52,14 +53,12 @@ func main() {
 
 	log.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
 	trace.T = opencensus.Adapter{}
-
 	var opts root.Opts
 	optsErr := root.SetDefaultOpts(&opts)
 	opts.Version = strings.Join([]string{k8sVersion, "vk", buildVersion}, "-")
 
 	s := provider.NewStore()
 	registerMock(s)
-
 	rootCmd := root.NewCommand(ctx, filepath.Base(os.Args[0]), s, opts)
 	rootCmd.AddCommand(version.NewCommand(buildVersion, buildTime), providers.NewCommand(s))
 	preRun := rootCmd.PreRunE
@@ -87,7 +86,7 @@ func main() {
 		}
 		return nil
 	}
-
+	fmt.Println("root execute before")
 	if err := rootCmd.Execute(); err != nil && errors.Cause(err) != context.Canceled {
 		log.G(ctx).Fatal(err)
 	}

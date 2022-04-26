@@ -31,7 +31,7 @@ const (
 	DefaultOperatingSystem      = "linux"
 	DefaultInformerResyncPeriod = 1 * time.Minute
 	DefaultMetricsAddr          = ":10255"
-	DefaultListenPort           = 10250 // TODO(cpuguy83)(VK1.0): Change this to an addr instead of just a port.. we should not be listening on all interfaces.
+	DefaultListenPort           = 10251 // TODO(cpuguy83)(VK1.0): Change this to an addr instead of just a port.. we should not be listening on all interfaces.
 	DefaultPodSyncWorkers       = 10
 	DefaultKubeNamespace        = corev1.NamespaceAll
 	DefaultKubeClusterDomain    = "cluster.local"

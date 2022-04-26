@@ -102,7 +102,7 @@ func (n *Node) Run(ctx context.Context) (retErr error) {
 		n.eb.StartLogging(log.G(ctx).Infof)
 		n.eb.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: n.client.CoreV1().Events(v1.NamespaceAll)})
 		defer n.eb.Shutdown()
-		log.G(ctx).Debug("Started event broadcaster")
+		log.G(ctx).Info("Started event broadcaster")
 	}
 
 	cancelHTTP, err := n.runHTTP(ctx)
@@ -128,7 +128,7 @@ func (n *Node) Run(ctx context.Context) (retErr error) {
 		return n.pc.Err()
 	}
 
-	log.G(ctx).Debug("pod controller ready")
+	log.G(ctx).Info("pod controller ready")
 
 	go n.nc.Run(ctx) //nolint:errcheck
 
@@ -146,7 +146,7 @@ func (n *Node) Run(ctx context.Context) (retErr error) {
 		return n.nc.Err()
 	}
 
-	log.G(ctx).Debug("node controller ready")
+	log.G(ctx).Info("node controller ready")
 
 	if n.readyCb != nil {
 		if err := n.readyCb(ctx); err != nil {
@@ -310,7 +310,7 @@ func NewNode(name string, newProvider NewProviderFunc, opts ...NodeOpt) (*Node, 
 			return nil, err
 		}
 	}
-
+	log.L.Info("opts finished")
 	if _, _, err := net.SplitHostPort(cfg.HTTPListenAddr); err != nil {
 		return nil, errors.Wrap(err, "error parsing http listen address")
 	}

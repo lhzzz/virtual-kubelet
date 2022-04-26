@@ -63,7 +63,7 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 	if c.PodSyncWorkers == 0 {
 		return errdefs.InvalidInput("pod sync workers must be greater than 0")
 	}
-
+	log.L.Info("runRootCommand")
 	var taint *corev1.Taint
 	if !c.DisableTaint {
 		var err error
@@ -101,12 +101,12 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 		cfg.Node.Status.NodeInfo.KubeletVersion = c.Version
 		return p, nil, nil
 	}
-
+	log.L.Info("getAPIConfig")
 	apiConfig, err := getAPIConfig(c)
 	if err != nil {
 		return err
 	}
-
+	log.L.Info("create NewNode")
 	cm, err := nodeutil.NewNode(c.NodeName, newProvider, func(cfg *nodeutil.NodeConfig) error {
 		cfg.KubeconfigPath = c.KubeConfigPath
 		cfg.Handler = mux
@@ -127,7 +127,7 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 
 		return nil
 	},
-		setAuth(c.NodeName, apiConfig),
+		//setAuth(c.NodeName, apiConfig),
 		nodeutil.WithTLSConfig(
 			nodeutil.WithKeyPairFromPath(apiConfig.CertPath, apiConfig.KeyPath),
 			maybeCA(apiConfig.CACertPath),
@@ -137,7 +137,7 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 	if err != nil {
 		return err
 	}
-
+	log.L.Info("setupTracing")
 	if err := setupTracing(ctx, c); err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 	go cm.Run(ctx) //nolint:errcheck
 
 	defer func() {
-		log.G(ctx).Debug("Waiting for controllers to be done")
+		log.G(ctx).Info("Waiting for controllers to be done")
 		cancel()
 		<-cm.Done()
 	}()
