@@ -74,6 +74,7 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 	}
 
 	mux := http.NewServeMux()
+	//newProvider的第二个返回值可以自定义
 	newProvider := func(cfg nodeutil.ProviderConfig) (nodeutil.Provider, node.NodeProvider, error) {
 		rm, err := manager.NewResourceManager(cfg.Pods, cfg.Secrets, cfg.ConfigMaps, cfg.Services)
 		if err != nil {

@@ -216,6 +216,7 @@ type NodeController struct { // nolint:golint
 	serverNode     *corev1.Node
 	nodes          v1.NodeInterface
 
+	//heartbeat需要用到的lease
 	leaseController *leaseController
 
 	pingInterval   time.Duration
