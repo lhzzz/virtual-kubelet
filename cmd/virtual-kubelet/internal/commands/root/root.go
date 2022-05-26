@@ -73,6 +73,11 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 		}
 	}
 
+	cs, err := nodeutil.ClientsetFromEnv(c.KubeConfigPath)
+	if err != nil {
+		return err
+	}
+
 	mux := http.NewServeMux()
 	//newProvider的第二个返回值可以自定义
 	newProvider := func(cfg nodeutil.ProviderConfig) (nodeutil.Provider, node.NodeProvider, error) {
@@ -112,7 +117,6 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 		cfg.KubeconfigPath = c.KubeConfigPath
 		cfg.Handler = mux
 		cfg.InformerResyncPeriod = c.InformerResyncPeriod
-
 		if taint != nil {
 			cfg.NodeSpec.Spec.Taints = append(cfg.NodeSpec.Spec.Taints, *taint)
 		}
@@ -123,12 +127,12 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 		cfg.StreamCreationTimeout = apiConfig.StreamCreationTimeout
 		cfg.StreamIdleTimeout = apiConfig.StreamIdleTimeout
 		cfg.DebugHTTP = true
-
 		cfg.NumWorkers = c.PodSyncWorkers
 
 		return nil
 	},
-		//setAuth(c.NodeName, apiConfig),
+		nodeutil.WithClient(cs),
+		setAuth(c.NodeName, apiConfig),
 		nodeutil.WithTLSConfig(
 			nodeutil.WithKeyPairFromPath(apiConfig.CertPath, apiConfig.KeyPath),
 			maybeCA(apiConfig.CACertPath),
