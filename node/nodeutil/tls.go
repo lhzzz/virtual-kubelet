@@ -40,10 +40,30 @@ func WithCAFromPath(p string) func(*tls.Config) error {
 	}
 }
 
+// WithCAFromPath makes a TLS config option to set up client auth using the path to a PEM encoded CA cert.
+func WithCA(pem []byte) func(*tls.Config) error {
+	return func(cfg *tls.Config) error {
+		cfg.ClientAuth = tls.RequireAndVerifyClientCert
+		return WithCACert(pem)(cfg)
+	}
+}
+
 // WithKeyPairFromPath make sa TLS config option which loads the key pair paths from disk and appends them to the tls config.
 func WithKeyPairFromPath(cert, key string) func(*tls.Config) error {
 	return func(cfg *tls.Config) error {
 		cert, err := tls.LoadX509KeyPair(cert, key)
+		if err != nil {
+			return err
+		}
+		cfg.Certificates = append(cfg.Certificates, cert)
+		return nil
+	}
+}
+
+// WithKeyPairFromPath make sa TLS config option which loads the key pair paths from disk and appends them to the tls config.
+func WithKeyPair(cert, key []byte) func(*tls.Config) error {
+	return func(cfg *tls.Config) error {
+		cert, err := tls.X509KeyPair(cert, key)
 		if err != nil {
 			return err
 		}

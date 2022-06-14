@@ -112,7 +112,7 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 	if err != nil {
 		return err
 	}
-	log.L.Info("create NewNode")
+	log.L.Infof("apiconfig:%v ,create NewNode", apiConfig)
 	cm, err := nodeutil.NewNode(c.NodeName, newProvider, func(cfg *nodeutil.NodeConfig) error {
 		cfg.KubeconfigPath = c.KubeConfigPath
 		cfg.Handler = mux

@@ -87,14 +87,14 @@ func loadConfig(providerConfig, nodeName string) (config ZhstConfig, err error) 
 	if err != nil {
 		return config, err
 	}
-	configMap := map[string]ZhstConfig{}
-	err = json.Unmarshal(data, &configMap)
+	//configMap := map[string]ZhstConfig{}
+	err = json.Unmarshal(data, &config)
 	if err != nil {
 		return config, err
 	}
-	if _, exist := configMap[nodeName]; exist {
-		config = configMap[nodeName]
-	}
+	// if _, exist := configMap[nodeName]; exist {
+	// 	config = configMap[nodeName]
+	// }
 
 	if config.CPU == "" {
 		config.CPU = defaultCPUCapacity
