@@ -9,6 +9,7 @@ require (
 	github.com/docker/spdystream v0.0.0-20170912183627-bc6354cbbc29 // indirect
 	github.com/elazarl/goproxy v0.0.0-20190421051319-9d40249d3c2f // indirect
 	github.com/elazarl/goproxy/ext v0.0.0-20190711103511-473e67f1d7d2 // indirect
+	github.com/golang/protobuf v1.4.2
 	github.com/google/go-cmp v0.5.2
 	github.com/gorilla/mux v1.7.3
 	github.com/mitchellh/go-homedir v1.1.0
@@ -22,6 +23,8 @@ require (
 	golang.org/x/sys v0.0.0-20201112073958-5cba982894dd
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
 	google.golang.org/api v0.15.1 // indirect
+	google.golang.org/grpc v1.27.0
+	google.golang.org/protobuf v1.24.0
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.19.10
 	k8s.io/apimachinery v0.19.10

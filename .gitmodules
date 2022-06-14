@@ -1,0 +1,3 @@
+[submodule "cmd/virtual-kubelet/internal/provider/zhst/edge-proto"]
+	path = cmd/virtual-kubelet/internal/provider/zhst/edge-proto
+	url = git@github.com:lhzzz/edge-proto.git

@@ -140,8 +140,8 @@ func (p *MockProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	// Add the pod's coordinates to the current span.
 	ctx = addAttributes(ctx, span, namespaceKey, pod.Namespace, nameKey, pod.Name)
-
-	log.G(ctx).Infof("receive CreatePod %q", pod.Name)
+	jsondata, _ := json.Marshal(pod)
+	log.G(ctx).Infof("receive CreatePod %v", string(jsondata))
 
 	key, err := buildKey(pod)
 	if err != nil {
