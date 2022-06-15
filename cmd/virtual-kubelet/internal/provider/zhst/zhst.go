@@ -135,9 +135,6 @@ func (p *ZhstProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	if err != nil {
 		return err
 	}
-	for i, _ := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Command = []string{"sleep", "10d"}
-	}
 	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.CreatePod(ctx, &pb.CreatePodRequest{
 		Pod: pod,
@@ -148,6 +145,8 @@ func (p *ZhstProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	if resp.Error != nil {
 		return fmt.Errorf(resp.Error.Msg)
 	}
+	pod = resp.Pod
+	log.G(ctx).Info("CreatePod resp , phase:", pod.Status.Phase, " reason:", pod.Status.Reason)
 	p.notifier(pod)
 	return nil
 }
@@ -167,6 +166,8 @@ func (p *ZhstProvider) UpdatePod(ctx context.Context, pod *v1.Pod) error {
 	if resp.Error != nil {
 		return fmt.Errorf(resp.Error.Msg)
 	}
+	pod = resp.Pod
+	log.G(ctx).Info("UpdatePod resp , phase:", pod.Status.Phase, " reason:", pod.Status.Reason)
 	p.notifier(pod)
 	return nil
 }

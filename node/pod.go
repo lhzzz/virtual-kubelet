@@ -64,11 +64,6 @@ func (pc *PodController) createOrUpdatePod(ctx context.Context, pod *corev1.Pod)
 	defer span.End()
 	addPodAttributes(ctx, span, pod)
 
-	ctx = span.WithFields(ctx, log.Fields{
-		"pod":       pod.GetName(),
-		"namespace": pod.GetNamespace(),
-	})
-
 	// We do this so we don't mutate the pod from the informer cache
 	pod = pod.DeepCopy()
 	if err := podutils.PopulateEnvironmentVariables(ctx, pod, pc.resourceManager, pc.recorder); err != nil {
@@ -335,7 +330,6 @@ func (pc *PodController) syncPodStatusFromProviderHandler(ctx context.Context, k
 	defer span.End()
 
 	ctx = span.WithField(ctx, "key", key)
-	log.G(ctx).Debug("processing pod status update")
 	defer func() {
 		span.SetStatus(retErr)
 		if retErr != nil {

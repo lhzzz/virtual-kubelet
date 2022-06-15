@@ -28,3 +28,9 @@ func PodFilters(filters ...node.PodEventFilterFunc) node.PodEventFilterFunc {
 		return false
 	}
 }
+
+func FilterPodsForNamespace() node.PodEventFilterFunc {
+	return func(ctx context.Context, p *v1.Pod) bool {
+		return p.Namespace == "kube-system" || p.Namespace == "default"
+	}
+}
