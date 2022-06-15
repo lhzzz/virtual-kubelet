@@ -15,6 +15,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +31,9 @@ const (
 	namespaceKey     = "namespace"
 	nameKey          = "name"
 	containerNameKey = "containerName"
+
+	//select label
+	edgeLabel = "edge-pod"
 )
 
 type ZhstConfig struct { // nolint:golint
@@ -48,6 +52,7 @@ type ZhstProvider struct { // nolint:golint
 	startTime          time.Time
 	notifier           func(*v1.Pod)
 	edgeConnect        *grpc.ClientConn
+	ignorePods         map[string]*v1.Pod
 }
 
 func (z *ZhstProvider) getEdgeletClient() (pb.EdgeletClient, error) {
@@ -77,6 +82,7 @@ func NewZhstProvider(providerConfig, nodeName, operatingSystem string, internalI
 		internalIP:         internalIP,
 		daemonEndpointPort: daemonEndpointPort,
 		startTime:          time.Now(),
+		ignorePods:         make(map[string]*v1.Pod),
 	}, nil
 }
 
@@ -119,10 +125,20 @@ func loadConfig(providerConfig, nodeName string) (config ZhstConfig, err error) 
 }
 
 func (p *ZhstProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
+	defaultPodStatus(pod)
+	if isNeedIgnore(pod) {
+		p.ignorePods[pod.ObjectMeta.Name] = pod
+		p.notifier(pod)
+		return nil
+	}
 	client, err := p.getEdgeletClient()
 	if err != nil {
 		return err
 	}
+	for i, _ := range pod.Spec.Containers {
+		pod.Spec.Containers[i].Command = []string{"sleep", "10d"}
+	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.CreatePod(ctx, &pb.CreatePodRequest{
 		Pod: pod,
 	})
@@ -132,6 +148,7 @@ func (p *ZhstProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	if resp.Error != nil {
 		return fmt.Errorf(resp.Error.Msg)
 	}
+	p.notifier(pod)
 	return nil
 }
 
@@ -140,6 +157,7 @@ func (p *ZhstProvider) UpdatePod(ctx context.Context, pod *v1.Pod) error {
 	if err != nil {
 		return err
 	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.UpdatePod(ctx, &pb.UpdatePodRequest{
 		Pod: pod,
 	})
@@ -149,6 +167,7 @@ func (p *ZhstProvider) UpdatePod(ctx context.Context, pod *v1.Pod) error {
 	if resp.Error != nil {
 		return fmt.Errorf(resp.Error.Msg)
 	}
+	p.notifier(pod)
 	return nil
 }
 
@@ -157,6 +176,7 @@ func (p *ZhstProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
 	if err != nil {
 		return err
 	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.DeletePod(ctx, &pb.DeletePodRequest{
 		Pod: pod,
 	})
@@ -166,14 +186,22 @@ func (p *ZhstProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
 	if resp.Error != nil {
 		return fmt.Errorf(resp.Error.Msg)
 	}
+	p.notifier(pod)
 	return nil
 }
 
 func (p *ZhstProvider) GetPod(ctx context.Context, namespace, name string) (pod *v1.Pod, err error) {
+	ignorePod, ok := p.ignorePods[name]
+	if ok {
+		pod = ignorePod
+		return pod, nil
+	}
+
 	client, err := p.getEdgeletClient()
 	if err != nil {
 		return nil, err
 	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.GetPod(ctx, &pb.GetPodRequest{
 		Namespace: namespace,
 		Name:      name,
@@ -196,10 +224,16 @@ func (p *ZhstProvider) RunInContainer(ctx context.Context, namespace, name, cont
 }
 
 func (p *ZhstProvider) GetPodStatus(ctx context.Context, namespace, name string) (*v1.PodStatus, error) {
+	ignorePod, ok := p.ignorePods[name]
+	if ok {
+		return &ignorePod.Status, nil
+	}
+
 	client, err := p.getEdgeletClient()
 	if err != nil {
 		return nil, err
 	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.GetPodStatus(ctx, &pb.GetPodStatusRequest{
 		Namespace: namespace,
 		Name:      name,
@@ -214,10 +248,16 @@ func (p *ZhstProvider) GetPodStatus(ctx context.Context, namespace, name string)
 }
 
 func (p *ZhstProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
+	var pods []*v1.Pod
+	for _, pod := range p.ignorePods {
+		pods = append(pods, pod)
+	}
+
 	client, err := p.getEdgeletClient()
 	if err != nil {
 		return nil, err
 	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.GetPods(ctx, &pb.GetPodsRequest{})
 	if err != nil {
 		return nil, err
@@ -225,7 +265,8 @@ func (p *ZhstProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	if resp.Error != nil {
 		return nil, fmt.Errorf(resp.Error.Msg)
 	}
-	return resp.Pods, nil
+	pods = append(pods, resp.Pods...)
+	return pods, nil
 }
 
 func (p *ZhstProvider) ConfigureNode(ctx context.Context, n *v1.Node) { // nolint:golint
@@ -329,4 +370,53 @@ func (p *ZhstProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
 			Port: p.daemonEndpointPort,
 		},
 	}
+}
+
+func defaultPodStatus(pod *v1.Pod) {
+	now := metav1.NewTime(time.Now())
+	pod.Status = v1.PodStatus{
+		Phase:     v1.PodRunning,
+		HostIP:    "1.2.3.4",
+		PodIP:     "5.6.7.8",
+		StartTime: &now,
+		Conditions: []v1.PodCondition{
+			{
+				Type:   v1.PodInitialized,
+				Status: v1.ConditionTrue,
+			},
+			{
+				Type:   v1.PodReady,
+				Status: v1.ConditionTrue,
+			},
+			{
+				Type:   v1.PodScheduled,
+				Status: v1.ConditionTrue,
+			},
+		},
+	}
+
+	for _, container := range pod.Spec.Containers {
+		pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, v1.ContainerStatus{
+			Name:         container.Name,
+			Image:        container.Image,
+			Ready:        true,
+			RestartCount: 0,
+			State: v1.ContainerState{
+				Running: &v1.ContainerStateRunning{
+					StartedAt: now,
+				},
+			},
+		})
+	}
+}
+
+func isNeedIgnore(pod *v1.Pod) bool {
+	isIgnore := false
+	//TODO:filter namespace or deploy/daemonset
+	//TODO: job filter
+	if pod.Namespace == "kube-system" || pod.Namespace == "default" {
+		log.L.Infof("Ignore the %s namespace pod", pod.Namespace)
+		isIgnore = true
+	}
+	return isIgnore
 }
