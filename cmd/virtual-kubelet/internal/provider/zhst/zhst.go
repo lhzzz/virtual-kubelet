@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/virtual-kubelet/virtual-kubelet/cmd/virtual-kubelet/internal/provider/zhst/edge-proto/pb"
+	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
@@ -135,6 +136,9 @@ func (p *ZhstProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	if err != nil {
 		return err
 	}
+	for i := range pod.Spec.Containers {
+		pod.Spec.Containers[i].Command = []string{"sleep", "10d"}
+	}
 	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.CreatePod(ctx, &pb.CreatePodRequest{
 		Pod: pod,
@@ -152,11 +156,19 @@ func (p *ZhstProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 }
 
 func (p *ZhstProvider) UpdatePod(ctx context.Context, pod *v1.Pod) error {
+	if isNeedIgnore(pod) {
+		p.ignorePods[pod.ObjectMeta.Name] = pod
+		p.notifier(pod)
+		return nil
+	}
 	client, err := p.getEdgeletClient()
 	if err != nil {
 		return err
 	}
 	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
+	for i := range pod.Spec.Containers {
+		pod.Spec.Containers[i].Command = []string{"sleep", "10d"}
+	}
 	resp, err := client.UpdatePod(ctx, &pb.UpdatePodRequest{
 		Pod: pod,
 	})
@@ -173,6 +185,12 @@ func (p *ZhstProvider) UpdatePod(ctx context.Context, pod *v1.Pod) error {
 }
 
 func (p *ZhstProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
+	prepareDeletePod(pod)
+	if isNeedIgnore(pod) {
+		delete(p.ignorePods, pod.Name)
+		p.notifier(pod)
+		return nil
+	}
 	client, err := p.getEdgeletClient()
 	if err != nil {
 		return err
@@ -211,9 +229,14 @@ func (p *ZhstProvider) GetPod(ctx context.Context, namespace, name string) (pod 
 		return nil, err
 	}
 	if resp.Error != nil {
+		if resp.Error.Code == pb.ErrorCode_NO_RESULT {
+			return nil, errdefs.NotFoundf("pod \"%s/%s\" is not known to the provider", namespace, name)
+		}
 		return nil, fmt.Errorf(resp.Error.Msg)
 	}
-	return resp.Pod, nil
+	pod = resp.Pod
+	log.G(ctx).Info("GetPod name:", name, " , phase:", pod.Status.Phase, " reason:", pod.Status.Reason)
+	return pod, nil
 }
 
 func (p *ZhstProvider) GetContainerLogs(ctx context.Context, namespace, podName, containerName string, opts api.ContainerLogOpts) (io.ReadCloser, error) {
@@ -235,7 +258,7 @@ func (p *ZhstProvider) GetPodStatus(ctx context.Context, namespace, name string)
 		return nil, err
 	}
 	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
-	resp, err := client.GetPodStatus(ctx, &pb.GetPodStatusRequest{
+	resp, err := client.GetPod(ctx, &pb.GetPodRequest{
 		Namespace: namespace,
 		Name:      name,
 	})
@@ -245,7 +268,7 @@ func (p *ZhstProvider) GetPodStatus(ctx context.Context, namespace, name string)
 	if resp.Error != nil {
 		return nil, fmt.Errorf(resp.Error.Msg)
 	}
-	return resp.PodStatus, nil
+	return &resp.Pod.Status, nil
 }
 
 func (p *ZhstProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
@@ -408,6 +431,23 @@ func defaultPodStatus(pod *v1.Pod) {
 				},
 			},
 		})
+	}
+}
+
+func prepareDeletePod(pod *v1.Pod) {
+	now := metav1.Now()
+	pod.Status.Phase = v1.PodSucceeded
+	pod.Status.Reason = "ZhstProviderPodDeleted"
+	for idx := range pod.Status.ContainerStatuses {
+		pod.Status.ContainerStatuses[idx].Ready = false
+		pod.Status.ContainerStatuses[idx].State = v1.ContainerState{
+			Terminated: &v1.ContainerStateTerminated{
+				Message:    "Zhst provider terminated container upon deletion",
+				FinishedAt: now,
+				Reason:     "ZhstProviderPodContainerDeleted",
+				StartedAt:  pod.Status.ContainerStatuses[idx].State.Running.StartedAt,
+			},
+		}
 	}
 }
 

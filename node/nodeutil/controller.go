@@ -384,14 +384,13 @@ func NewNode(name string, newProvider NewProviderFunc, opts ...NodeOpt) (*Node, 
 	}
 
 	pc, err := node.NewPodController(node.PodControllerConfig{
-		PodClient:          cfg.Client.CoreV1(),
-		EventRecorder:      cfg.EventRecorder,
-		Provider:           p,
-		PodInformer:        podInformer,
-		SecretInformer:     secretInformer,
-		ConfigMapInformer:  configMapInformer,
-		ServiceInformer:    serviceInformer,
-		PodEventFilterFunc: FilterPodsForNamespace(), // add custom filter for pod event
+		PodClient:         cfg.Client.CoreV1(),
+		EventRecorder:     cfg.EventRecorder,
+		Provider:          p,
+		PodInformer:       podInformer,
+		SecretInformer:    secretInformer,
+		ConfigMapInformer: configMapInformer,
+		ServiceInformer:   serviceInformer,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating pod controller")
