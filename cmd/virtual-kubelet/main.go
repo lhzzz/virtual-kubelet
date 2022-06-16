@@ -51,7 +51,15 @@ func main() {
 		cancel()
 	}()
 
-	log.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
+	standardLog := logrus.StandardLogger()
+	formatter := &logrus.TextFormatter{
+		ForceColors:     true,
+		FullTimestamp:   true,
+		DisableQuote:    true,
+		TimestampFormat: "2006-01-02 15:04:05",
+	}
+	standardLog.SetFormatter(formatter)
+	log.L = logruslogger.FromLogrus(logrus.NewEntry(standardLog))
 	trace.T = opencensus.Adapter{}
 	var opts root.Opts
 	optsErr := root.SetDefaultOpts(&opts)

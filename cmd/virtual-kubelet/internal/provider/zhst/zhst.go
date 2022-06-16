@@ -32,9 +32,10 @@ const (
 	namespaceKey     = "namespace"
 	nameKey          = "name"
 	containerNameKey = "containerName"
+)
 
-	//select label
-	edgeLabel = "edge-pod"
+var (
+	netErrorPodStatus *v1.PodStatus = &v1.PodStatus{Phase: v1.PodUnknown, Reason: "ConnectProviderFailed"}
 )
 
 type ZhstConfig struct { // nolint:golint
@@ -76,7 +77,7 @@ func NewZhstProvider(providerConfig, nodeName, operatingSystem string, internalI
 	if err != nil {
 		return nil, err
 	}
-	return &ZhstProvider{
+	zp := &ZhstProvider{
 		config:             config,
 		nodeName:           nodeName,
 		operatingSystem:    operatingSystem,
@@ -84,7 +85,9 @@ func NewZhstProvider(providerConfig, nodeName, operatingSystem string, internalI
 		daemonEndpointPort: daemonEndpointPort,
 		startTime:          time.Now(),
 		ignorePods:         make(map[string]*v1.Pod),
-	}, nil
+	}
+
+	return zp, nil
 }
 
 // loadConfig loads the given json configuration files.
@@ -136,9 +139,6 @@ func (p *ZhstProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	if err != nil {
 		return err
 	}
-	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Command = []string{"sleep", "10d"}
-	}
 	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.CreatePod(ctx, &pb.CreatePodRequest{
 		Pod: pod,
@@ -150,7 +150,6 @@ func (p *ZhstProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		return fmt.Errorf(resp.Error.Msg)
 	}
 	pod = resp.Pod
-	log.G(ctx).Info("CreatePod resp , phase:", pod.Status.Phase, " reason:", pod.Status.Reason)
 	p.notifier(pod)
 	return nil
 }
@@ -166,9 +165,6 @@ func (p *ZhstProvider) UpdatePod(ctx context.Context, pod *v1.Pod) error {
 		return err
 	}
 	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
-	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Command = []string{"sleep", "10d"}
-	}
 	resp, err := client.UpdatePod(ctx, &pb.UpdatePodRequest{
 		Pod: pod,
 	})
@@ -179,13 +175,11 @@ func (p *ZhstProvider) UpdatePod(ctx context.Context, pod *v1.Pod) error {
 		return fmt.Errorf(resp.Error.Msg)
 	}
 	pod = resp.Pod
-	log.G(ctx).Info("UpdatePod resp , phase:", pod.Status.Phase, " reason:", pod.Status.Reason)
 	p.notifier(pod)
 	return nil
 }
 
 func (p *ZhstProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
-	prepareDeletePod(pod)
 	if isNeedIgnore(pod) {
 		delete(p.ignorePods, pod.Name)
 		p.notifier(pod)
@@ -205,13 +199,13 @@ func (p *ZhstProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
 	if resp.Error != nil {
 		return fmt.Errorf(resp.Error.Msg)
 	}
+	prepareDeletePod(pod)
 	p.notifier(pod)
 	return nil
 }
 
 func (p *ZhstProvider) GetPod(ctx context.Context, namespace, name string) (pod *v1.Pod, err error) {
-	ignorePod, ok := p.ignorePods[name]
-	if ok {
+	if ignorePod, ok := p.ignorePods[name]; ok {
 		pod = ignorePod
 		return pod, nil
 	}
@@ -255,7 +249,8 @@ func (p *ZhstProvider) GetPodStatus(ctx context.Context, namespace, name string)
 
 	client, err := p.getEdgeletClient()
 	if err != nil {
-		return nil, err
+		log.G(ctx).Error("GetPodStatus getEdgeletClient failed,err=", err)
+		return netErrorPodStatus, nil
 	}
 	ctx = metadata.AppendToOutgoingContext(ctx, "node", p.nodeName)
 	resp, err := client.GetPod(ctx, &pb.GetPodRequest{
@@ -263,9 +258,13 @@ func (p *ZhstProvider) GetPodStatus(ctx context.Context, namespace, name string)
 		Name:      name,
 	})
 	if err != nil {
-		return nil, err
+		log.G(ctx).Error("ZhstProvider GetPodStatus failed,err=", err)
+		return netErrorPodStatus, nil
 	}
 	if resp.Error != nil {
+		if resp.Error.Code == pb.ErrorCode_NO_RESULT {
+			return nil, errdefs.NotFoundf("pod \"%s/%s\" is not known to the provider", namespace, name)
+		}
 		return nil, fmt.Errorf(resp.Error.Msg)
 	}
 	return &resp.Pod.Status, nil
