@@ -26,6 +26,7 @@ func registerZhst(s *provider.Store) {
 			cfg.OperatingSystem,
 			cfg.InternalIP,
 			cfg.DaemonPort,
+			cfg.ResourceManager,
 		)
 	})
 }

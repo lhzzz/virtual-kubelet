@@ -104,15 +104,17 @@ func runRootCommand(ctx context.Context, s *provider.Store, c Opts) error {
 			return nil, nil, errors.Wrapf(err, "error initializing provider %s", c.Provider)
 		}
 		p.ConfigureNode(ctx, cfg.Node)
+		var np node.NodeProvider
+		if npFromProvider, ok := p.(node.NodeProvider); ok {
+			np = npFromProvider
+		}
 		cfg.Node.Status.NodeInfo.KubeletVersion = c.Version
-		return p, nil, nil
+		return p, np, nil
 	}
-	log.L.Info("getAPIConfig")
 	apiConfig, err := getAPIConfig(c)
 	if err != nil {
 		return err
 	}
-	log.L.Infof("apiconfig:%v ,create NewNode", apiConfig)
 	cm, err := nodeutil.NewNode(c.NodeName, newProvider, func(cfg *nodeutil.NodeConfig) error {
 		cfg.KubeconfigPath = c.KubeConfigPath
 		cfg.Handler = mux

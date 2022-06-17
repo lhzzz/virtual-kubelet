@@ -361,7 +361,6 @@ func NewNode(name string, newProvider NewProviderFunc, opts ...NodeOpt) (*Node, 
 
 		readyCb = func(ctx context.Context) error {
 			setNodeReady(&cfg.NodeSpec)
-			//修改node的关键在于实现UpdateStatus方法
 			err := nnp.UpdateStatus(ctx, &cfg.NodeSpec)
 			return errors.Wrap(err, "error marking node as ready")
 		}
